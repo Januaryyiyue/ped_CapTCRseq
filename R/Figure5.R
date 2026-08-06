@@ -2,7 +2,7 @@
 
 # Title: Figure 5 - GLIPH TCR specificity group analysis
 #
-# Inputs:
+# Inputs: 
 #   - `data/metadata.rds`
 #   - `data/soc_good_with_baseregimen.rds`
 #   - `data/int_samples_gliph_tigerdb_annot_stat.rds`

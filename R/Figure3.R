@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Title: Figure 3
+# Title: Figure 3 
 #
 # Inputs:
 #   - `data/metadata.rds`
