@@ -181,7 +181,7 @@ soc_good_long <- soc_good %>%
   ) %>%
   select(Patient, cycle, regimen)
 
-head(soc_good_long)
+# head(soc_good_long)
 # Join soc_good_long to metadata
 # First, create a mapping between cycle formats (X05 -> cycle5)
 metadata$cycle_mapped <- paste0("cycle", gsub("X0?", "", metadata$cycle))

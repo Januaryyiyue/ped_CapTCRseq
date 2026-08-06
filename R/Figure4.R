@@ -33,13 +33,13 @@ suppressPackageStartupMessages({
 Sys.setlocale(category = "LC_ALL", locale = "en_US.UTF-8")
 
 # Load helper palettes and themes
-source(file.path("/Users/anabbi/git/ped_CapTCRseq/", "R/functions", "color_schemes.R"))
-source(file.path("/Users/anabbi/git/ped_CapTCRseq/", "R/functions", "ggplot2_theme.R"))
-source(file.path("/Users/anabbi/git/ped_CapTCRseq/", "R/functions", "Misc_functions.R"))
-source(file.path("/Users/anabbi/git/ped_CapTCRseq/", "R/functions", "Plotting_functions.R"))
+source(file.path(getwd(), "R/functions", "color_schemes.R"))
+source(file.path(getwd(), "R/functions", "ggplot2_theme.R"))
+source(file.path(getwd(), "R/functions", "Misc_functions.R"))
+source(file.path(getwd(), "R/functions", "Plotting_functions.R"))
 
 # Project-rooted paths
-project_root <- "/Users/anabbi/git/ped_CapTCRseq/"
+project_root <- getwd()
 # project_root <- getwd()
 plots_dir <- file.path(project_root, "plots")
 input_rds <- file.path(project_root, "data", "metadata.rds")
