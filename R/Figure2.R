@@ -13,7 +13,8 @@
 #   - Numeric plotting source data in tables/figure2/
 # Usage:
 #   Rscript R/Figure2.R
-# Run notebook 15 first, then run this script from the repository root.
+# Use the bundled notebook-15 outputs, or rerun notebook 15 to rebuild them.
+# Run this script from the repository root.
 # PCA, imputation and tests are read from the notebook outputs; plots are rebuilt.
 
 # --- Setup --------------------------------------------------------------------
