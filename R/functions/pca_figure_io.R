@@ -61,6 +61,11 @@
   baseline <- statistics$baseline_lymphoma
   regimen <- statistics$regimen_contrasts
   paired <- statistics$paired_rank
+  ci_columns <- c("SE", "df", "ci_adjustment", "ci_family_level", "ci_n_tests",
+                  "ci_individual_level")
+  if (!all(ci_columns %in% names(baseline)) || !all(ci_columns %in% names(regimen)))
+    stop("Association results need simultaneous confidence intervals. ",
+         "Rerun notebook 15 before plotting Figure 2.", call. = FALSE)
   stopifnot(setequal(baseline$dataset, c("Original", "missMDA")),
             !anyDuplicated(baseline$dataset),
             all(c("estimate", "lower", "upper", "p_Holm", "p_rank_Holm") %in% names(baseline)),
@@ -74,6 +79,21 @@
     sum(regimen$analysis == "Age_cancer_adjusted_sensitivity"), nrow(paired))
   stopifnot(identical(as.integer(statistics$families$n_tests), as.integer(family_counts)),
             all(statistics$families$correction == "Holm"))
+  for (data in list(baseline, regimen)) {
+    lower <- if ("lower.CL" %in% names(data)) data$lower.CL else data$lower
+    upper <- if ("upper.CL" %in% names(data)) data$upper.CL else data$upper
+    half_width <- qt(1 - .05 / (2 * data$ci_n_tests), data$df) * data$SE
+    stopifnot(all(data$ci_adjustment == "Bonferroni"),
+              all(data$ci_family_level == .95),
+              max(abs(data$ci_individual_level - (1 - .05 / data$ci_n_tests))) < 1e-12,
+              max(abs(lower - (data$estimate - half_width))) < 1e-9,
+              max(abs(upper - (data$estimate + half_width))) < 1e-9)
+  }
+  stopifnot(all(baseline$ci_n_tests == nrow(baseline)))
+  for (analysis in unique(regimen$analysis)) {
+    rows <- regimen$analysis == analysis
+    stopifnot(all(regimen$ci_n_tests[rows] == sum(rows)))
+  }
   invisible(TRUE)
 }
 
