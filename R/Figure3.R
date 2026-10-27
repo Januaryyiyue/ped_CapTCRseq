@@ -10,7 +10,7 @@
 #   - plots/Figure3.pdf, .png and .svg
 #   - tables/Figure3_points.csv and Figure3_*edges.csv (numeric source data)
 # Usage (from the repository root):
-#   Run notebook 15 first, then:
+#   Use the bundled notebook-15 outputs, or rerun notebook 15 to rebuild them.
 #   Rscript R/Figure3.R [project_root] [plots_dir]
 # This script reads the prepared PCA reference and scores; it does not refit PCA
 # or recompute imputation.
