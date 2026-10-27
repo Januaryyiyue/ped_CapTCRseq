@@ -5,11 +5,9 @@
 # Inputs: 
 #   - `data/metadata.rds`
 #   - `data/soc_good_with_baseregimen.rds`
-#   - `data/int_samples_gliph_tigerdb_annot_stat.rds`
 #   - `data/gliph_tigerdb_annot_stat.rds`
 #   - `data/int_gliph_tigerdb_cleaned.rds`
 #   - `data/int_samples_gliph_tigerdb_annot_freq_stat.rds`
-#   - `data/gliph_tigerdb_annot_freq_stat.rds`
 #   - Color and theme helpers from `R/functions/color_schemes.R` and `R/functions/ggplot2_theme.R`
 # Outputs:
 #   - `plots/Fig4A.pdf` - Volcano-style plot of TCR specificity-group clonal change vs Fisher score
