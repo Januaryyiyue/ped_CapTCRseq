@@ -1,6 +1,24 @@
 # Patient-aware associations computed by notebook 15 on a common PCA reference.
 # All numerical quantities are recomputed; this file reads no previous results.
 
+# Holm is retained for tests. Bonferroni gives simultaneous confidence intervals
+# across the same family without assumptions about dependence between contrasts.
+.pca_simultaneous_t_intervals <- function(table, lower, upper, level = .95) {
+  n_tests <- nrow(table)
+  stopifnot(n_tests > 0L, all(is.finite(table$estimate)),
+            all(is.finite(table$SE)), all(table$SE >= 0), all(table$df > 0))
+  table[[paste0(lower, "_pointwise")]] <- table[[lower]]
+  table[[paste0(upper, "_pointwise")]] <- table[[upper]]
+  half_width <- qt(1 - (1 - level) / (2 * n_tests), table$df) * table$SE
+  table[[lower]] <- table$estimate - half_width
+  table[[upper]] <- table$estimate + half_width
+  table$ci_adjustment <- "Bonferroni"
+  table$ci_family_level <- level
+  table$ci_n_tests <- n_tests
+  table$ci_individual_level <- 1 - (1 - level) / n_tests
+  table
+}
+
 fit_pca_associations <- function(inputs) {
   for (pkg in c("lme4", "lmerTest", "emmeans")) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -57,9 +75,11 @@ fit_pca_associations <- function(inputs) {
   rownames(baseline) <- NULL
   baseline$p_Holm <- p.adjust(baseline$p, "holm")
   baseline$p_rank_Holm <- p.adjust(baseline$p_rank, "holm")
+  baseline <- .pca_simultaneous_t_intervals(baseline, "lower", "upper")
   recorded_group <- do.call(rbind, recorded_group)
   rownames(recorded_group) <- NULL
   recorded_group$p_Holm <- p.adjust(recorded_group$p, "holm")
+  recorded_group <- .pca_simultaneous_t_intervals(recorded_group, "lower", "upper")
 
   # The cohorts overlap. Each is fitted separately; no statistical comparison
   # between cohorts is made. Include all estimable regimen-v-baseline contrasts
@@ -95,9 +115,10 @@ fit_pca_associations <- function(inputs) {
         result$PC <- pc
         result$analysis <- if (adjusted) "Age_cancer_adjusted_sensitivity" else
           "Current_patient_intercept_primary"
-        result$standardized_shift <- result$estimate / sd(z$score)
-        result$standardized_lower <- result$lower.CL / sd(z$score)
-        result$standardized_upper <- result$upper.CL / sd(z$score)
+        result$score_SD <- sd(z$score)
+        result$standardized_shift <- result$estimate / result$score_SD
+        result$standardized_lower <- result$lower.CL / result$score_SD
+        result$standardized_upper <- result$upper.CL / result$score_SD
         contrasts[[length(contrasts) + 1L]] <- result
         diagnostics[[length(diagnostics) + 1L]] <- data.frame(
           dataset = cohort, PC = pc, analysis = result$analysis[1],
@@ -109,10 +130,23 @@ fit_pca_associations <- function(inputs) {
   }
   contrasts <- do.call(rbind, contrasts)
   contrasts$p_Holm <- NA_real_
+  contrasts$standardized_lower_pointwise <- contrasts$standardized_lower
+  contrasts$standardized_upper_pointwise <- contrasts$standardized_upper
+  families <- list()
   for (analysis in unique(contrasts$analysis)) {
     rows <- which(contrasts$analysis == analysis)
     contrasts$p_Holm[rows] <- p.adjust(contrasts$p.value[rows], "holm")
+    families[[analysis]] <- .pca_simultaneous_t_intervals(
+      contrasts[rows, , drop = FALSE], "lower.CL", "upper.CL")
   }
+  contrasts <- do.call(rbind, families)
+  rownames(contrasts) <- NULL
+  contrasts$standardized_lower <- contrasts$lower.CL / contrasts$score_SD
+  contrasts$standardized_upper <- contrasts$upper.CL / contrasts$score_SD
+  attr(contrasts, "mesg") <- c(
+    "Degrees-of-freedom method: satterthwaite",
+    "95% simultaneous confidence intervals: Bonferroni within each analysis family",
+    "P values: Holm within each analysis family")
 
   # A paired sensitivity: one first eligible post-treatment visit per patient
   # and regimen, matched to that patient's own X01. Not the raincloud's full
@@ -176,7 +210,10 @@ fit_pca_associations <- function(inputs) {
                     "Adjusted regimen sensitivity", "Selected paired rank sensitivity"),
          n_tests = c(nrow(baseline), sum(contrasts$analysis == "Current_patient_intercept_primary"),
                      sum(contrasts$analysis == "Age_cancer_adjusted_sensitivity"), nrow(paired_rank)),
-         correction = "Holm"))
+         correction = "Holm",
+         ci_adjustment = c("Bonferroni", "Bonferroni", "Bonferroni",
+                           "None (descriptive bootstrap median and rank effect)"),
+         ci_family_level = c(.95, .95, .95, NA_real_)))
 }
 
 write_pca_association_tables <- function(statistics, tables_dir) {
