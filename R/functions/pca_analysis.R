@@ -90,6 +90,11 @@ prepare_pca_inputs <- function(project_root = getwd(), ncp = 2L,
       pNA = 0.10, threshold = 1e-6, verbose = FALSE
     )
     ncp <- as.integer(rank_cv$ncp)
+    if (length(ncp) == 1L && is.finite(ncp) && ncp == 0L)
+      stop("Rank cross-validation selected zero components (feature-mean reconstruction). ",
+           "This workflow requires a nonzero reconstruction rank. ",
+           "Inspect rank_cv and rerun the fixed-rank manuscript workflow with ",
+           "rerun_rank_cv = FALSE if reproducing the supplied figures.")
   }
   if (length(ncp) != 1L || !is.finite(ncp) || ncp < 1L || ncp >= ncol(raw))
     stop("Invalid reconstruction rank")
@@ -159,7 +164,7 @@ prepare_pca_inputs <- function(project_root = getwd(), ncp = 2L,
   disease_order <- c("ALL", "AML", "CML", "HR ALL", "BL", "DLBCL", "HD", "PMBCL",
     "ARMS", "ERMS", "EWS", "HB", "NB", "OS", "WILMS", "ALCL", "T-ALL", "RMS", "BLL", "MS NB")
   palette_env <- new.env(parent = baseenv())
-  sys.source(file.path(project_root, "R_updated", "functions", "color_schemes.R"), envir = palette_env)
+  sys.source(file.path(project_root, "R", "functions", "color_schemes.R"), envir = palette_env)
   if (!all(as.character(md$Disease_type) %in% disease_order)) stop("Unmapped cancer type")
   settings <- list(ncp = ncp, seed = seed, method = "Regularized", scale = TRUE,
     nb.init = 5L, threshold = 1e-6, maxiter = 1000L,
