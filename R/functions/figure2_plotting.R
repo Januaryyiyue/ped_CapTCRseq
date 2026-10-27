@@ -388,15 +388,15 @@ export_extended2 <- function(result, plots_dir) {
     save_figure_plot(result$plots[[name]], file.path(plots_dir, stem),
                     dimensions[1], dimensions[2])
   }
-  grDevices::cairo_pdf(file.path(plots_dir, "Extended2_updated.pdf"),
+  grDevices::cairo_pdf(file.path(plots_dir, "Extended2.pdf"),
                       width = 10, height = 7, onefile = TRUE, family = "sans")
   for (plot in result$plots) print(plot)
   grDevices::dev.off()
   overview <- cowplot::plot_grid(plotlist = result$plots, ncol = 2, align = "hv")
-  save_figure_plot(overview, file.path(plots_dir, "Extended2_updated_overview"), 20, 7, dpi = 180)
+  save_figure_plot(overview, file.path(plots_dir, "Extended2_overview"), 20, 7, dpi = 180)
   for (extension in c("png", "svg")) file.copy(
-    file.path(plots_dir, paste0("Extended2_updated_overview.", extension)),
-    file.path(plots_dir, paste0("Extended2_updated.", extension)), overwrite = TRUE)
+    file.path(plots_dir, paste0("Extended2_overview.", extension)),
+    file.path(plots_dir, paste0("Extended2.", extension)), overwrite = TRUE)
   invisible(overview)
 }
 
@@ -435,7 +435,7 @@ export_figure2 <- function(result, plots_dir) {
     save_figure_plot(result$plots[[name]], file.path(plots_dir, stem), dimensions[1], dimensions[2])
   }
   # Keep native panel dimensions on each PDF page, including A/B at half C's width.
-  grDevices::cairo_pdf(file.path(plots_dir, "Figure2_updated.pdf"), width = 12, height = 9.6,
+  grDevices::cairo_pdf(file.path(plots_dir, "Figure2.pdf"), width = 12, height = 9.6,
     onefile = TRUE, family = "sans")
   for (name in names(result$plots)) {
     dimensions <- result$dimensions[[name]]
@@ -470,10 +470,10 @@ export_figure2 <- function(result, plots_dir) {
       x = cell$x / canvas[1], y = cell$y / canvas[2],
       width = panel_size[1] / canvas[1], height = panel_size[2] / canvas[2])
   }
-  save_figure_plot(overview, file.path(plots_dir, "Figure2_updated_overview"), canvas[1], canvas[2], dpi = 150)
-  file.copy(file.path(plots_dir, "Figure2_updated_overview.png"),
-    file.path(plots_dir, "Figure2_updated.png"), overwrite = TRUE)
-  file.copy(file.path(plots_dir, "Figure2_updated_overview.svg"),
-    file.path(plots_dir, "Figure2_updated.svg"), overwrite = TRUE)
+  save_figure_plot(overview, file.path(plots_dir, "Figure2_overview"), canvas[1], canvas[2], dpi = 150)
+  file.copy(file.path(plots_dir, "Figure2_overview.png"),
+    file.path(plots_dir, "Figure2.png"), overwrite = TRUE)
+  file.copy(file.path(plots_dir, "Figure2_overview.svg"),
+    file.path(plots_dir, "Figure2.svg"), overwrite = TRUE)
   invisible(overview)
 }
