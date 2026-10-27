@@ -242,7 +242,7 @@ make_raincloud_data <- function(data, category, pc, levels, tag) {
 figure2_statistics_strip <- function(table, primary_note = NULL, paired_note = NULL) {
   format_p <- function(p) ifelse(is.na(p), "NE", format.pval(p, digits = 2, eps = .0001))
   x <- c(.13, .36, .58)
-  headers <- c("Cohort", "Holm P", "Shift [95% CI]")
+  headers <- c("Cohort", "Holm P", "Shift [95% Bonferroni CI]")
   text <- function(label, x, y, bold = FALSE, size = 10.5)
     grid::textGrob(label, x = x, y = y, hjust = 0,
       gp = grid::gpar(fontfamily = "sans", fontsize = size,
@@ -273,7 +273,9 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
     colours <- c("Non-lymphoma" = "#7570B3", "Lymphoma" = "#D95F02")
     r <- statistics$baseline_lymphoma[match(cohort_order, statistics$baseline_lymphoma$dataset), ]
     table <- data.frame(panel = "Fig2d", dataset = r$dataset, estimate = r$estimate,
-      lower = r$lower, upper = r$upper, primary_p_Holm = r$p_Holm)
+      lower = r$lower, upper = r$upper, primary_p_Holm = r$p_Holm,
+      ci_adjustment = r$ci_adjustment, ci_family_level = r$ci_family_level,
+      ci_n_tests = r$ci_n_tests)
     strip <- figure2_statistics_strip(table)
   } else {
     d <- data[data$regimen %in% c("baseline", regimen), , drop = FALSE]
@@ -287,7 +289,9 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
     ranks <- all_ranks[all_ranks$regimen == regimen & all_ranks$PC == pc, ]
     ranks <- ranks[match(cohort_order, ranks$dataset), ]
     table <- data.frame(panel = paste0("Fig2", tag), dataset = r$dataset, estimate = r$estimate,
-      lower = r$lower.CL, upper = r$upper.CL, primary_p_Holm = r$p_Holm)
+      lower = r$lower.CL, upper = r$upper.CL, primary_p_Holm = r$p_Holm,
+      ci_adjustment = r$ci_adjustment, ci_family_level = r$ci_family_level,
+      ci_n_tests = r$ci_n_tests)
     strip <- figure2_statistics_strip(table)
   }
   pd <- make_raincloud_data(d, "category_show", pc, levels, tag)
