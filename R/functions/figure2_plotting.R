@@ -263,10 +263,12 @@ figure2_statistics_strip <- function(table, primary_note = NULL, paired_note = N
 
 make_association_raincloud <- function(tag, data, inputs, statistics) {
   cohort_order <- c("Original", "missMDA")
-  regimen <- if (tag == "e") "Vincristine/Cyclophosphamide" else "Vincristine"
+  regimen <- switch(tag, d = NA_character_, e = "Vincristine/Cyclophosphamide",
+                    f = "Vincristine", g = "Any cyclophosphamide")
   levels <- if (tag == "d") c("Non-lymphoma", "Lymphoma") else
-    c("Baseline (X01)", if (tag == "e") "Vincristine /\ncyclophosphamide" else "Vincristine")
-  pc <- if (tag == "f") "PC2" else "PC1"
+    c("Baseline (X01)", switch(tag, e = "Vincristine /\ncyclophosphamide",
+                              f = "Vincristine", g = "Cyclophosphamide-\ncontaining"))
+  pc <- if (tag %in% c("f", "g")) "PC2" else "PC1"
   if (tag == "d") {
     d <- data[data$cycle_num == 1, , drop = FALSE]
     d$category_show <- d$lymphoma
@@ -278,16 +280,21 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
       ci_n_tests = r$ci_n_tests)
     strip <- figure2_statistics_strip(table)
   } else {
-    d <- data[data$regimen %in% c("baseline", regimen), , drop = FALSE]
+    if (tag == "g") {
+      audited <- statistics$cyclophosphamide$analysis_source
+      keep <- audited$included_in_model &
+        (audited$cycle_num == 1L | audited$contains_cyclophosphamide)
+      keys <- paste(audited$dataset[keep], audited$sample_id[keep])
+      d <- data[paste(data$dataset, data$sample_id) %in% keys, , drop = FALSE]
+      stopifnot(nrow(d) == sum(keep))
+    } else d <- data[data$regimen %in% c("baseline", regimen), , drop = FALSE]
     d$category_show <- ifelse(d$regimen == "baseline", levels[1], levels[2])
-    colours <- setNames(c("grey50", inputs$therapy_palette[regimen]), levels)
+    therapy_colour <- inputs$therapy_palette[if (tag == "g") "Cyclophosphamide" else regimen]
+    colours <- setNames(c("grey50", therapy_colour), levels)
     all_contrasts <- statistics$regimen_contrasts
     r <- all_contrasts[all_contrasts$analysis == "Current_patient_intercept_primary" &
       all_contrasts$regimen == regimen & all_contrasts$PC == pc, ]
     r <- r[match(cohort_order, r$dataset), ]
-    all_ranks <- statistics$paired_rank
-    ranks <- all_ranks[all_ranks$regimen == regimen & all_ranks$PC == pc, ]
-    ranks <- ranks[match(cohort_order, ranks$dataset), ]
     table <- data.frame(panel = paste0("Fig2", tag), dataset = r$dataset, estimate = r$estimate,
       lower = r$lower.CL, upper = r$upper.CL, primary_p_Holm = r$p_Holm,
       ci_adjustment = r$ci_adjustment, ci_family_level = r$ci_family_level,
@@ -296,7 +303,7 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
   }
   pd <- make_raincloud_data(d, "category_show", pc, levels, tag)
   labels <- vapply(levels, function(category) paste0(category, "\nOriginal ",
-    sum(pd$source$category == category & pd$source$dataset == "Original"), " | missMDA ",
+    sum(pd$source$category == category & pd$source$dataset == "Original"), "\nmissMDA ",
     sum(pd$source$category == category & pd$source$dataset == "missMDA")), character(1))
   main <- ggplot() +
     geom_polygon(data = pd$cloud_polygons, aes(x, y, group = id, fill = category),
@@ -314,7 +321,8 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
       limits = c(.5, length(levels) + .5), expand = c(0, 0)) +
     scale_y_continuous(expand = expansion(mult = c(.06, .07))) +
     labs(title = switch(tag, d = "Baseline PC1: lymphoma",
-      e = "PC1: vincristine / cyclophosphamide", f = "PC2: vincristine"),
+      e = "PC1: vincristine /\ncyclophosphamide", f = "PC2: vincristine",
+      g = "PC2: cyclophosphamide-\ncontaining regimens"),
       x = NULL, y = paste0(pc, " score"), tag = tag) +
     figure2_theme() + theme(legend.position = "top", legend.key.width = grid::unit(12, "pt"),
       legend.margin = margin(0, 0, 0, 0), legend.box.spacing = grid::unit(3, "pt"),
@@ -343,15 +351,16 @@ build_figure2_panels <- function(inputs, statistics) {
     ncol = 2, nrow = 2, rel_widths = c(1.65, 1), rel_heights = c(1, 1.65), align = "hv", axis = "tblr")
   plots$Fig2c <- cowplot::plot_grid(p_c, labels = "c", label_size = 16,
     label_fontfamily = "sans")
-  association_data <- setNames(lapply(c("d", "e", "f"), function(tag)
-    make_association_raincloud(tag, data, inputs, statistics)), paste0("Fig2", c("d", "e", "f")))
+  association_data <- setNames(lapply(c("d", "e", "f", "g"), function(tag)
+    make_association_raincloud(tag, data, inputs, statistics)), paste0("Fig2", c("d", "e", "f", "g")))
   plots <- c(plots, lapply(association_data, `[[`, "plot"))
   counts <- do.call(rbind, lapply(names(subsets), function(panel)
     do.call(rbind, lapply(split(subsets[[panel]], subsets[[panel]]$dataset), function(d)
       data.frame(panel = panel, dataset = d$dataset[1], n_samples = nrow(d),
         n_patients = length(unique(d$Patient)))))))
   list(plots = plots, dimensions = list(Fig2a = c(6, 4.8), Fig2b = c(6, 4.8),
-    Fig2c = c(12, 9.6), Fig2d = c(6.2, 5.7), Fig2e = c(6.2, 5.7), Fig2f = c(6.2, 5.7)),
+    Fig2c = c(12, 9.6), Fig2d = c(4.65, 5.7), Fig2e = c(4.65, 5.7),
+    Fig2f = c(4.65, 5.7), Fig2g = c(4.65, 5.7)),
     source = subsets, loading_arrows = pca_loading_arrows(inputs$reference_pca),
     marginal_data = marginal, association_data = association_data, counts = counts,
     cancer_palette = palettes$cancer)
@@ -450,12 +459,13 @@ export_figure2 <- function(result, plots_dir) {
   }
   grDevices::dev.off()
   # Stack A/B at left with exactly the same combined height as C at right.
-  # D-F share the next row; retain all native dimensions and font sizes.
+  # D-G share the next row, at one quarter of the existing overview width each.
   dimensions <- result$dimensions
+  bottom_keys <- c("Fig2d", "Fig2e", "Fig2f", "Fig2g")
   upper_height <- dimensions$Fig2c[2]
-  lower_height <- max(vapply(dimensions[c("Fig2d", "Fig2e", "Fig2f")],
+  lower_height <- max(vapply(dimensions[bottom_keys],
     function(d) d[2], numeric(1)))
-  canvas_width <- sum(vapply(dimensions[c("Fig2d", "Fig2e", "Fig2f")],
+  canvas_width <- sum(vapply(dimensions[bottom_keys],
     function(d) d[1], numeric(1)))
   row_gap <- .3
   canvas <- c(canvas_width, upper_height + row_gap + lower_height)
@@ -465,8 +475,9 @@ export_figure2 <- function(result, plots_dir) {
   upper_bottom <- lower_height + row_gap
   cells <- data.frame(key = names(result$plots),
     x = c(0, 0, dimensions$Fig2a[1] + column_gap,
-      0, dimensions$Fig2d[1], dimensions$Fig2d[1] + dimensions$Fig2e[1]),
-    y = c(upper_bottom + dimensions$Fig2b[2], upper_bottom, upper_bottom, 0, 0, 0))
+      head(cumsum(c(0, vapply(dimensions[bottom_keys], function(d) d[1], numeric(1)))), -1)),
+    y = c(upper_bottom + dimensions$Fig2b[2], upper_bottom, upper_bottom,
+          rep(0, length(bottom_keys))))
   overview <- cowplot::ggdraw()
   for (i in seq_len(nrow(cells))) {
     cell <- cells[i, ]; panel_size <- dimensions[[cell$key]]
