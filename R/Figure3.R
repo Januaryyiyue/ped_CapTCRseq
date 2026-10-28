@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Title: Figure 3 - Longitudinal immune-profile PCA trajectories by cancer type
+# Title: Figure 3 - Immune-profile PCA by cancer type
 #
 # Inputs:
 #   - data/pca_inputs.rds
@@ -8,7 +8,7 @@
 #   - Palettes and themes from R/functions/color_schemes.R and ggplot2_theme.R
 # Outputs:
 #   - plots/Figure3.pdf, .png and .svg
-#   - tables/Figure3_points.csv and Figure3_*edges.csv (numeric source data)
+#   - tables/Figure3_points.csv and Figure3_verification_checks.csv
 # Usage (from the repository root):
 #   Use the bundled notebook-15 outputs, or rerun notebook 15 to rebuild them.
 #   Rscript R/Figure3.R [project_root] [plots_dir]
@@ -17,8 +17,8 @@
 #
 # Original observations are complete cases projected onto the missMDA reference.
 # The cohorts overlap: every Original observation also belongs to missMDA.
-# Arrows connect consecutive available observations and use the exposure recorded
-# at the destination observation; they do not establish a causal treatment effect.
+# All observations are shown without patient connections. Colours indicate the
+# recorded exposure; the plot does not establish a causal treatment effect.
 
 # --- Setup --------------------------------------------------------------------
 
@@ -26,83 +26,6 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(grid)
 })
-
-# Cap arrows in physical millimetres inside each facet's actual viewport. A data-
-# coordinate offset would change with panel size or export format. The 1 mm cap
-# matches the outer edge of size-1.8, stroke-0.55 circles (about 0.97 mm radius).
-# Overlapping circles have no visible gap in which to draw a valid arrow.
-makeContent.pca_edge_arrows <- function(x) {
-  x0 <- grid::convertX(grid::unit(x$x0, "native"), "mm", valueOnly = TRUE)
-  y0 <- grid::convertY(grid::unit(x$y0, "native"), "mm", valueOnly = TRUE)
-  x1 <- grid::convertX(grid::unit(x$x1, "native"), "mm", valueOnly = TRUE)
-  y1 <- grid::convertY(grid::unit(x$y1, "native"), "mm", valueOnly = TRUE)
-  dx <- x1 - x0
-  dy <- y1 - y0
-  distance <- sqrt(dx^2 + dy^2)
-  radius <- x$point_radius_mm
-  drawable <- is.finite(distance) & distance > 2 * radius + 1e-6
-  ux <- dx / pmax(distance, .Machine$double.eps)
-  uy <- dy / pmax(distance, .Machine$double.eps)
-  start_x <- x0 + ux * radius
-  start_y <- y0 + uy * radius
-  end_x <- x1 - ux * radius
-  end_y <- y1 - uy * radius
-  visible_length <- pmax(0, distance - 2 * radius)
-  max_head <- grid::convertUnit(x$arrow$length, "mm", valueOnly = TRUE)[1]
-  head_length <- pmin(max_head, visible_length * .45)
-  children <- lapply(which(drawable), function(i) {
-    grid::segmentsGrob(
-      x0 = start_x[i], y0 = start_y[i], x1 = end_x[i], y1 = end_y[i],
-      default.units = "mm",
-      gp = grid::gpar(col = x$colour[i], fill = NA, lwd = x$linewidth[i],
-                      lty = x$linetype[i], lineend = "butt", linejoin = "round"),
-      arrow = grid::arrow(angle = x$arrow$angle[1],
-                          length = grid::unit(head_length[i], "mm"),
-                          type = "open", ends = "last"))
-  })
-  if (!is.null(x$audit)) {
-    record <- data.frame(
-      device = x$audit$device, panel = x$panel, edge_id = x$edge_id,
-      center_distance_mm = distance, point_radius_mm = radius,
-      arrow_drawn = drawable, visible_length_mm = visible_length,
-      arrow_head_mm = head_length,
-      from_x_mm = x0, from_y_mm = y0, to_x_mm = x1, to_y_mm = y1,
-      start_x_mm = start_x, start_y_mm = start_y, end_x_mm = end_x, end_y_mm = end_y,
-      start_cap_mm = sqrt((start_x - x0)^2 + (start_y - y0)^2),
-      end_cap_mm = sqrt((end_x - x1)^2 + (end_y - y1)^2))
-    x$audit$records[[length(x$audit$records) + 1L]] <- record
-  }
-  grid::setChildren(x, do.call(grid::gList, children))
-}
-
-GeomPcaEdgeArrow <- ggplot2::ggproto(
-  "GeomPcaEdgeArrow", ggplot2::GeomSegment,
-  default_aes = ggplot2::aes(colour = "black", linewidth = .25, linetype = 1,
-                             alpha = NA, edge_id = NA_integer_),
-  draw_panel = function(data, panel_params, coord, arrow = NULL, arrow.fill = NA,
-                         lineend = "butt", linejoin = "round", na.rm = FALSE,
-                         point_radius_mm = 1, audit = NULL) {
-    if (!nrow(data)) return(grid::nullGrob())
-    if (!coord$is_linear()) stop("Edge-capped PCA arrows require linear axes")
-    data <- coord$transform(data, panel_params)
-    grid::gTree(
-      x0 = data$x, y0 = data$y, x1 = data$xend, y1 = data$yend,
-      colour = ggplot2::alpha(data$colour, data$alpha),
-      linewidth = data$linewidth * ggplot2::.pt, linetype = data$linetype,
-      panel = as.character(data$PANEL), edge_id = data$edge_id,
-      point_radius_mm = point_radius_mm, arrow = arrow, audit = audit,
-      cl = "pca_edge_arrows")
-  })
-
-geom_pca_edge_arrow <- function(mapping = NULL, data = NULL, ..., arrow,
-                                point_radius_mm = 1, audit = NULL,
-                                show.legend = FALSE, inherit.aes = TRUE) {
-  ggplot2::layer(
-    geom = GeomPcaEdgeArrow, mapping = mapping, data = data, stat = "identity",
-    position = "identity", show.legend = show.legend, inherit.aes = inherit.aes,
-    params = list(arrow = arrow, point_radius_mm = point_radius_mm,
-                  audit = audit, ...))
-}
 
 # --- Data preparation and plotting --------------------------------------------
 
@@ -159,31 +82,6 @@ build_figure3 <- function(project_root, plots_dir = file.path(project_root, "plo
                                    as.matrix(full[overlap_rows, c("PC1", "PC2")]))))
   stopifnot(all(is.finite(coordinate_errors)), all(coordinate_errors < 1e-9))
 
-  # Build each physical trajectory once from the completed cohort. The Original
-  # cohort is an overlay, so constructing edges twice would duplicate arrows.
-  edge_rows <- lapply(split(full, full$Patient), function(data) {
-    data <- data[order(data$cycle_num), , drop = FALSE]
-    if (nrow(data) < 2L) return(NULL)
-    from <- data[-nrow(data), , drop = FALSE]
-    to <- data[-1L, , drop = FALSE]
-    data.frame(
-      Patient = to$Patient, Disease_type = to$Disease_type,
-      from_sample_id = from$sample_id, to_sample_id = to$sample_id,
-      from_cycle = from$cycle, to_cycle = to$cycle,
-      from_cycle_num = from$cycle_num, to_cycle_num = to$cycle_num,
-      gap_cycles = to$cycle_num - from$cycle_num - 1L,
-      regimen = to$regimen, PC1 = from$PC1, PC2 = from$PC2,
-      PC1_end = to$PC1, PC2_end = to$PC2, stringsAsFactors = FALSE)
-  })
-  edges <- do.call(rbind, edge_rows)
-  rownames(edges) <- NULL
-  selected_regimens <- c("Vincristine", "Vincristine/Cyclophosphamide")
-  edges$arrow_eligible <- as.character(edges$regimen) %in% selected_regimens
-  selected_edges <- edges[edges$arrow_eligible, , drop = FALSE]
-  selected_edges$edge_id <- seq_len(nrow(selected_edges))
-  stopifnot(!anyDuplicated(paste(edges$from_sample_id, edges$to_sample_id)),
-            all(edges$to_cycle_num > edges$from_cycle_num))
-
   # --- Figure -----------------------------------------------------------------
 
   regimen_labels <- c(
@@ -198,21 +96,9 @@ build_figure3 <- function(project_root, plots_dir = file.path(project_root, "plo
     mean(limits) + c(-0.55, 0.55) * max(diff(limits), 1)
   }
 
-  arrow_audit <- new.env(parent = emptyenv())
-  arrow_audit$records <- list()
-  arrow_audit$device <- "interactive"
-
   p <- ggplot() +
     geom_hline(yintercept = 0, linetype = "solid", colour = "gray50", linewidth = 0.3) +
     geom_vline(xintercept = 0, linetype = "solid", colour = "gray50", linewidth = 0.3) +
-    geom_pca_edge_arrow(data = selected_edges,
-                 aes(x = PC1, y = PC2, xend = PC1_end, yend = PC2_end,
-                     colour = regimen, edge_id = edge_id), linewidth = 0.25, alpha = 0.6,
-                 linetype = "solid",
-                 point_radius_mm = 1, audit = arrow_audit,
-                 arrow = grid::arrow(length = grid::unit(0.07, "inches"),
-                                     type = "open", ends = "last"),
-                 arrow.fill = NA, show.legend = FALSE) +
     geom_point(data = full, aes(PC1, PC2, colour = regimen, shape = dataset),
                size = 1.8, stroke = 0.55, alpha = 0.8) +
     geom_point(data = original, aes(PC1, PC2, colour = regimen, shape = dataset),
@@ -228,8 +114,7 @@ build_figure3 <- function(project_root, plots_dir = file.path(project_root, "plo
            shape = guide_legend(nrow = 1, order = 2,
                                override.aes = list(colour = "black", alpha = 1, size = 2.6))) +
     coord_cartesian(xlim = pad_range(full$PC1), ylim = pad_range(full$PC2)) +
-    labs(title = "A  Longitudinal PCA trajectories by cancer",
-         subtitle = "Arrows show Vincristine or Vincristine/Cyclophosphamide at the destination sample",
+    labs(title = "A  Immune-profile PCA by cancer",
          x = sprintf("Inverted Immune Checkpoint axis (PC1 = %.1f%%)", inputs$variance_percent[1]),
          y = sprintf("Diversity axis (PC2 = %.1f%%)", inputs$variance_percent[2])) +
     theme_minimal() + myplot + myaxis +
@@ -251,19 +136,19 @@ build_figure3 <- function(project_root, plots_dir = file.path(project_root, "plo
     check = c("All diagnoses present", "Five rows by four columns",
               "All completed observations plotted", "All Original observations plotted",
               "Completed cohort uses open circles", "Original uses filled circles",
-              "All selected edges passed to edge-cap renderer", "Only selected regimen arrows",
-              "Arrow tips are open", "Reference and trajectory lines are solid",
+              "Only points and axis reference lines", "Reference lines are solid",
               "Shared PCA coordinate checks"),
     passed = c(nrow(built$layout$layout) == length(disease_order),
                max(built$layout$layout$ROW) == 5L && max(built$layout$layout$COL) == 4L,
-               nrow(built$data[[4]]) == nrow(full), nrow(built$data[[5]]) == nrow(original),
-               all(built$data[[4]]$shape == 1L), all(built$data[[5]]$shape == 16L),
-               nrow(built$data[[3]]) == nrow(selected_edges),
-               all(as.character(selected_edges$regimen) %in% selected_regimens),
-               p$layers[[3]]$geom_params$arrow$type == 1L,
-               all(vapply(built$data[1:3], function(layer) {
-                 all(layer$linetype %in% c(1, "solid"))
-               }, logical(1))),
+               nrow(built$data[[3]]) == nrow(full), nrow(built$data[[4]]) == nrow(original),
+               all(built$data[[3]]$shape == 1L), all(built$data[[4]]$shape == 16L),
+               length(p$layers) == 4L &&
+                 inherits(p$layers[[1]]$geom, "GeomHline") &&
+                 inherits(p$layers[[2]]$geom, "GeomVline") &&
+                 all(vapply(p$layers[3:4], function(layer)
+                   inherits(layer$geom, "GeomPoint"), logical(1))),
+               all(vapply(built$data[1:2], function(layer)
+                 all(layer$linetype %in% c(1, "solid")), logical(1))),
                all(coordinate_errors < 1e-9)))
   stopifnot(all(checks$passed))
   point_data <- rbind(full, original)
@@ -277,38 +162,22 @@ build_figure3 <- function(project_root, plots_dir = file.path(project_root, "plo
     dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
     dir.create(tables_dir, recursive = TRUE, showWarnings = FALSE)
     for (extension in c("pdf", "png", "svg")) {
-      arrow_audit$device <- extension
       device <- switch(extension, pdf = grDevices::cairo_pdf,
                        png = ragg::agg_png, svg = svglite::svglite)
       ggsave(file.path(plots_dir, paste0("Figure3.", extension)), p,
              width = 13, height = 16, units = "in", dpi = 220,
              bg = "white", device = device)
     }
-    endpoint_checks <- do.call(rbind, arrow_audit$records)
-    endpoint_checks <- endpoint_checks[!duplicated(endpoint_checks[, c("device", "panel", "edge_id")]), ]
-    rownames(endpoint_checks) <- NULL
-    drawn <- endpoint_checks$arrow_drawn
-    stopifnot(all(endpoint_checks$visible_length_mm[drawn] > 0),
-              all(abs(endpoint_checks$start_cap_mm[drawn] - 1) < 1e-9),
-              all(abs(endpoint_checks$end_cap_mm[drawn] - 1) < 1e-9),
-              all(endpoint_checks$arrow_head_mm[drawn] <=
-                    .45 * endpoint_checks$visible_length_mm[drawn] + 1e-9))
-    write.csv(endpoint_checks, file.path(tables_dir, "Figure3_arrow_endpoint_checks.csv"), row.names = FALSE)
     write.csv(point_data[, c("sample_id", "Patient", "cycle", "cycle_num", "Disease_type",
                              "regimen", "dataset", "PC1", "PC2", "n_missing_original",
                              "any_feature_imputed")],
               file.path(tables_dir, "Figure3_points.csv"), row.names = FALSE)
-    write.csv(edges, file.path(tables_dir, "Figure3_all_edges.csv"), row.names = FALSE)
-    write.csv(selected_edges, file.path(tables_dir, "Figure3_selected_edges.csv"), row.names = FALSE)
-    write.csv(edges[edges$gap_cycles > 0L, ],
-              file.path(tables_dir, "Figure3_cycle_gap_edges.csv"), row.names = FALSE)
     write.csv(checks, file.path(tables_dir, "Figure3_verification_checks.csv"), row.names = FALSE)
     capture.output(sessionInfo(), file = file.path(tables_dir, "Figure3_sessionInfo.txt"))
     message("Figure 3 saved to ", file.path(plots_dir, "Figure3.pdf"))
   }
-  invisible(list(plot = p, points = point_data, all_edges = edges,
-                 selected_edges = selected_edges, checks = checks,
-                 coordinate_errors = coordinate_errors, arrow_audit = arrow_audit))
+  invisible(list(plot = p, points = point_data, checks = checks,
+                 coordinate_errors = coordinate_errors))
 }
 
 # Keep the plotting function available for interactive use when sourced.
