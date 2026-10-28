@@ -55,12 +55,23 @@
 }
 
 .validate_pca_figure_statistics <- function(statistics) {
-  required <- c("baseline_lymphoma", "regimen_contrasts", "paired_rank", "families")
+  required <- c("baseline_lymphoma", "regimen_contrasts", "paired_rank", "families",
+                "cyclophosphamide")
   if (!is.list(statistics) || !all(required %in% names(statistics)))
-    stop("Incomplete notebook-15 association result bundle", call. = FALSE)
+    stop("Association results need panel G. Rerun notebook 15 before plotting Figure 2.",
+         call. = FALSE)
   baseline <- statistics$baseline_lymphoma
   regimen <- statistics$regimen_contrasts
   paired <- statistics$paired_rank
+  pooled <- statistics$cyclophosphamide
+  pooled_rows <- regimen$regimen == "Any cyclophosphamide"
+  stopifnot(sum(pooled_rows) == 4L, all(regimen$PC[pooled_rows] == "PC2"),
+            sum(paired$regimen == "Any cyclophosphamide") == 2L,
+            all(c("analysis_source", "exposure_audit", "coverage") %in% names(pooled)),
+            all(c("dataset", "sample_id", "included_in_model", "contains_cyclophosphamide") %in%
+                  names(pooled$analysis_source)),
+            all(pooled$exposure_audit$n_drug_label_mismatches == 0L),
+            !anyDuplicated(paste(pooled$analysis_source$dataset, pooled$analysis_source$sample_id)))
   ci_columns <- c("SE", "df", "ci_adjustment", "ci_family_level", "ci_n_tests",
                   "ci_individual_level")
   if (!all(ci_columns %in% names(baseline)) || !all(ci_columns %in% names(regimen)))
