@@ -19,7 +19,7 @@
   table
 }
 
-fit_pca_associations <- function(inputs) {
+fit_pca_associations <- function(inputs, soc) {
   for (pkg in c("lme4", "lmerTest", "emmeans")) {
     if (!requireNamespace(pkg, quietly = TRUE)) {
       stop("Install the required R package: ", pkg, call. = FALSE)
@@ -122,13 +122,18 @@ fit_pca_associations <- function(inputs) {
         contrasts[[length(contrasts) + 1L]] <- result
         diagnostics[[length(diagnostics) + 1L]] <- data.frame(
           dataset = cohort, PC = pc, analysis = result$analysis[1],
+          model_scope = "Regimen categories",
           n_samples = nrow(z), n_patients = length(unique(z$Patient)),
           singular = lme4::isSingular(fit),
           convergence = paste(fit@optinfo$conv$lme4$messages, collapse = ";"))
       }
     }
   }
-  contrasts <- do.call(rbind, contrasts)
+  # Append the additional pooled PC2 hypothesis before the shared correction.
+  # The original regimen models retain all samples and their existing fits.
+  pooled <- fit_pca_cyclophosphamide(inputs, soc)
+  contrasts <- .pca_bind_rows(do.call(rbind, contrasts), pooled$regimen_contrasts)
+  model_warnings <- c(model_warnings, pooled$warnings)
   contrasts$p_Holm <- NA_real_
   contrasts$standardized_lower_pointwise <- contrasts$standardized_lower
   contrasts$standardized_upper_pointwise <- contrasts$standardized_upper
@@ -197,13 +202,16 @@ fit_pca_associations <- function(inputs) {
         test = if (is.null(rank_test)) "All paired changes zero" else rank_test$method)
     }
   }
-  paired_rank <- do.call(rbind, paired_rank)
+  paired_rank <- .pca_bind_rows(do.call(rbind, paired_rank), pooled$paired_rank)
   paired_rank$p_Holm <- p.adjust(paired_rank$p, "holm")
   paired_rank$p_sign_Holm <- p.adjust(paired_rank$p_sign, "holm")
 
   list(baseline_lymphoma = baseline, recorded_group_sensitivity = recorded_group,
        regimen_contrasts = contrasts, paired_rank = paired_rank,
-       paired_changes = do.call(rbind, pairs), diagnostics = do.call(rbind, diagnostics),
+       paired_changes = .pca_bind_rows(do.call(rbind, pairs), pooled$paired_changes),
+       diagnostics = .pca_bind_rows(do.call(rbind, diagnostics), pooled$diagnostics),
+       cyclophosphamide = pooled[c("diagnostics", "analysis_source", "coverage",
+         "composition", "exposure_audit", "paired_patient_changes", "warnings")],
        warnings = unique(model_warnings),
        families = data.frame(
          family = c("Baseline cancer contrasts", "Primary regimen contrasts",
@@ -229,5 +237,6 @@ write_pca_association_tables <- function(statistics, tables_dir) {
     write.csv(statistics[[name]], file.path(tables_dir, files[[name]]), row.names = FALSE)
   }
   writeLines(statistics$warnings, file.path(tables_dir, "model_warnings.txt"))
+  write_pca_cyclophosphamide_tables(statistics, file.path(tables_dir, "cyclophosphamide"))
   invisible(files)
 }
