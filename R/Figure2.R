@@ -8,7 +8,8 @@
 # Outputs:
 #   - plots/Fig2A-G.pdf, .png and .svg
 #   - plots/Figure2.pdf (seven pages at native panel sizes) and overview PDF/PNG/SVG
-#   - Overview: A above B at left, C at right; D-G across the next row
+#   - plots/Fig2AB.pdf, .png and .svg: A/B with one shared legend
+#   - Overview: A above B at left with shared legend, C at right; D-G below
 #   - Panels A/B: 6 x 4.8 inches each; panel C: 12 x 9.6 inches
 #   - Panels D-G: 4.65 x 5.7 inches each; overview: 18.6 x 15.6 inches
 #   - Numeric plotting source data in tables/figure2/
@@ -29,6 +30,8 @@ suppressPackageStartupMessages({
   library(cowplot)
   library(patchwork)
 })
+
+cowplot::set_null_device("agg")
 
 source(file.path(getwd(), "R/functions", "color_schemes.R"))
 source(file.path(getwd(), "R/functions", "ggplot2_theme.R"))
