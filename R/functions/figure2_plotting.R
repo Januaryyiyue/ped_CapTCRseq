@@ -172,7 +172,7 @@ make_pca_marginal <- function(pc, data, marginal_data, palette) {
       aes(x, y, group = group, fill = regimen), colour = "black", linewidth = .35, alpha = .4) +
     geom_polygon(data = polygons[polygons$cohort == "missMDA", ],
       aes(x, y, group = group, colour = regimen), fill = NA, linewidth = .65) +
-    geom_point(data = data, aes(value, regimen_position), shape = "|", size = 2.3,
+    geom_point(data = data, aes(value, regimen_position), shape = if (pc == "PC2") "-" else "|", size = 2.3,
       colour = "black", alpha = .6) +
     scale_fill_manual(values = palette) + scale_colour_manual(values = palette) +
     scale_x_continuous(limits = if (pc == "PC1") c(-7, 4) else c(-4, 6),
@@ -267,7 +267,9 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
                     f = "Vincristine", g = "Any cyclophosphamide")
   levels <- if (tag == "d") c("Non-lymphoma", "Lymphoma") else
     c("Baseline (X01)", switch(tag, e = "Vincristine /\ncyclophosphamide",
-                              f = "Vincristine", g = "Cyclophosphamide-\ncontaining"))
+                              f = "Vincristine", g = paste0("cyclophosphamide +\n",
+                                "vincristine/cyclophosphamide +\n",
+                                "vincristine/methotrexate/\ncyclophosphamide")))
   pc <- if (tag %in% c("f", "g")) "PC2" else "PC1"
   if (tag == "d") {
     d <- data[data$cycle_num == 1, , drop = FALSE]
@@ -302,9 +304,13 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
     strip <- figure2_statistics_strip(table)
   }
   pd <- make_raincloud_data(d, "category_show", pc, levels, tag)
-  labels <- vapply(levels, function(category) paste0(category, "\nOriginal ",
-    sum(pd$source$category == category & pd$source$dataset == "Original"), "\nmissMDA ",
-    sum(pd$source$category == category & pd$source$dataset == "missMDA")), character(1))
+  labels <- vapply(levels, function(category) {
+    axis_category <- if (tag %in% c("e", "f", "g") && category == levels[2])
+      "On treatment" else category
+    paste0(axis_category, "\nOriginal n=",
+      sum(pd$source$category == category & pd$source$dataset == "Original"), "\nmissMDA n=",
+      sum(pd$source$category == category & pd$source$dataset == "missMDA"))
+  }, character(1))
   main <- ggplot() +
     geom_polygon(data = pd$cloud_polygons, aes(x, y, group = id, fill = category),
       alpha = .40, colour = "grey40", linewidth = .3) +
@@ -322,10 +328,13 @@ make_association_raincloud <- function(tag, data, inputs, statistics) {
     scale_y_continuous(expand = expansion(mult = c(.06, .07))) +
     labs(title = switch(tag, d = "Baseline PC1: lymphoma",
       e = "PC1: vincristine /\ncyclophosphamide", f = "PC2: vincristine",
-      g = "PC2: cyclophosphamide-\ncontaining regimens"),
-      x = NULL, y = paste0(pc, " score"), tag = tag) +
+      g = paste0("PC2: cyclophosphamide +\n",
+        "vincristine/cyclophosphamide +\n",
+        "vincristine/methotrexate/cyclophosphamide")),
+      x = NULL, y = paste0(pc, " score"), tag = toupper(tag)) +
     figure2_theme() + theme(legend.position = "top", legend.key.width = grid::unit(12, "pt"),
       legend.margin = margin(0, 0, 0, 0), legend.box.spacing = grid::unit(3, "pt"),
+      axis.text.x = element_text(size = 11, angle = 0, hjust = .5),
       plot.margin = margin(7, 8, 3, 8))
   pd$plot <- (main / strip) + patchwork::plot_layout(heights = c(4.35, 1.35))
   pd$statistics <- table
@@ -338,10 +347,22 @@ build_figure2_panels <- function(inputs, statistics) {
   subsets <- list(Fig2a = data[data$cycle_num == 1, ],
     Fig2b = data[data$cycle_num > 1, ], Fig2c = data)
   plots <- list(
-    Fig2a = make_pca_biplot(subsets$Fig2a, inputs) + labs(tag = "a") +
-      theme(legend.key.height = grid::unit(.3, "cm")),
-    Fig2b = make_pca_biplot(subsets$Fig2b, inputs) + labs(tag = "b") +
-      theme(legend.key.height = grid::unit(.3, "cm")))
+    Fig2a = make_pca_biplot(subsets$Fig2a, inputs) +
+      labs(tag = "A", subtitle = "Baseline") +
+      theme(legend.key.height = grid::unit(.3, "cm"),
+            plot.subtitle = element_text(size = 13, hjust = .5)),
+    Fig2b = make_pca_biplot(subsets$Fig2b, inputs) +
+      labs(tag = "B", subtitle = "On-treatment") +
+      theme(legend.key.height = grid::unit(.3, "cm"), legend.position = "none",
+            plot.subtitle = element_text(size = 13, hjust = .5)))
+  # One common guide for the stacked A/B panels in the assembled figure.
+  ab_legend <- cowplot::get_legend(plots$Fig2a + theme(legend.position = "right"))
+  ab_stack <- cowplot::plot_grid(
+    plots$Fig2a + theme(legend.position = "none"),
+    plots$Fig2b + theme(legend.position = "none"),
+    ncol = 1, align = "v", axis = "lr")
+  ab_combined <- cowplot::plot_grid(ab_stack, ab_legend,
+    nrow = 1, rel_widths = c(.70, .30))
   central <- make_pca_biplot(data, inputs, "exposed_regimen", y_limit = c(-4, 6)) +
     guides(colour = "none", shape = "none") + theme(plot.margin = margin(0, 0, 0, 0))
   marginal <- make_pca_marginal_data(data, palettes$therapy)
@@ -349,7 +370,7 @@ build_figure2_panels <- function(inputs, statistics) {
   my <- make_pca_marginal("PC2", data, marginal, palettes$therapy)
   p_c <- cowplot::plot_grid(mx, make_pca_marginal_legend(palettes$therapy), central, my,
     ncol = 2, nrow = 2, rel_widths = c(1.65, 1), rel_heights = c(1, 1.65), align = "hv", axis = "tblr")
-  plots$Fig2c <- cowplot::plot_grid(p_c, labels = "c", label_size = 16,
+  plots$Fig2c <- cowplot::plot_grid(p_c, labels = "C", label_size = 16,
     label_fontfamily = "sans")
   association_data <- setNames(lapply(c("d", "e", "f", "g"), function(tag)
     make_association_raincloud(tag, data, inputs, statistics)), paste0("Fig2", c("d", "e", "f", "g")))
@@ -358,7 +379,8 @@ build_figure2_panels <- function(inputs, statistics) {
     do.call(rbind, lapply(split(subsets[[panel]], subsets[[panel]]$dataset), function(d)
       data.frame(panel = panel, dataset = d$dataset[1], n_samples = nrow(d),
         n_patients = length(unique(d$Patient)))))))
-  list(plots = plots, dimensions = list(Fig2a = c(6, 4.8), Fig2b = c(6, 4.8),
+  list(plots = plots, ab_combined = ab_combined, ab_legend = ab_legend,
+    dimensions = list(Fig2a = c(6, 4.8), Fig2b = c(6, 4.8),
     Fig2c = c(12, 9.6), Fig2d = c(4.65, 5.7), Fig2e = c(4.65, 5.7),
     Fig2f = c(4.65, 5.7), Fig2g = c(4.65, 5.7)),
     source = subsets, loading_arrows = pca_loading_arrows(inputs$reference_pca),
@@ -447,6 +469,9 @@ export_figure2 <- function(result, plots_dir) {
     dimensions <- result$dimensions[[name]]
     save_figure_plot(result$plots[[name]], file.path(plots_dir, stem), dimensions[1], dimensions[2])
   }
+  # Export the paired A/B layout with its single shared guide as well.
+  save_figure_plot(result$ab_combined, file.path(plots_dir, "Fig2AB"),
+    result$dimensions$Fig2a[1], sum(result$dimensions$Fig2a[2], result$dimensions$Fig2b[2]))
   # Keep native panel dimensions on each PDF page, including A/B at half C's width.
   grDevices::cairo_pdf(file.path(plots_dir, "Figure2.pdf"), width = 12, height = 9.6,
     onefile = TRUE, family = "sans")
@@ -478,7 +503,10 @@ export_figure2 <- function(result, plots_dir) {
       head(cumsum(c(0, vapply(dimensions[bottom_keys], function(d) d[1], numeric(1)))), -1)),
     y = c(upper_bottom + dimensions$Fig2b[2], upper_bottom, upper_bottom,
           rep(0, length(bottom_keys))))
-  overview <- cowplot::ggdraw()
+  overview <- cowplot::ggdraw() + cowplot::draw_plot(result$ab_combined,
+    x = 0, y = upper_bottom / canvas[2],
+    width = dimensions$Fig2a[1] / canvas[1], height = upper_height / canvas[2])
+  cells <- cells[!cells$key %in% c("Fig2a", "Fig2b"), , drop = FALSE]
   for (i in seq_len(nrow(cells))) {
     cell <- cells[i, ]; panel_size <- dimensions[[cell$key]]
     overview <- overview + cowplot::draw_plot(result$plots[[cell$key]],
